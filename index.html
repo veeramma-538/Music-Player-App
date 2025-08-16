@@ -1,0 +1,267 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Mini Music Player</title>
+  <style>
+    :root{
+      --bg:#0f1220; --card:#171a2b; --text:#e9ecff; --muted:#9aa3c7;
+      --accent:#7c87ff; --accent-2:#4de2c0;
+    }
+    *{box-sizing:border-box}
+    body{
+      margin:0; min-height:100svh; display:grid; place-items:center;
+      background: radial-gradient(80% 120% at 30% 10%, #14172a, #0b0e1a 60%, #05060d),
+                  linear-gradient(120deg, #0f1220, #0b0f1f);
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+      color:var(--text);
+    }
+    .player{
+      width:min(92vw, 460px); background:linear-gradient(180deg,#1b1f33,#14172a);
+      border:1px solid #242948; border-radius:24px; padding:22px 18px 18px;
+      box-shadow: 0 10px 30px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.04);
+    }
+    .header{
+      display:flex; gap:14px; align-items:center; margin-bottom:14px;
+    }
+    .cover{
+      width:72px; height:72px; border-radius:14px; flex:0 0 72px;
+      background:
+        radial-gradient(80% 80% at 30% 25%, rgba(255,255,255,.15), transparent 60%),
+        linear-gradient(135deg,var(--accent),var(--accent-2));
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,.08);
+    }
+    .meta{min-width:0}
+    .title{
+      margin:0; font-weight:700; font-size:1.05rem; letter-spacing:.2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+    }
+    .artist{
+      margin:4px 0 0; color:var(--muted); font-size:.9rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+    }
+
+    .progress{
+      position:relative; height:10px; border-radius:999px; background:#202544;
+      margin:14px 2px 6px; cursor:pointer; user-select:none;
+    }
+    .bar{
+      position:absolute; inset:0 0 0 auto; width:0%; background:
+        linear-gradient(90deg,var(--accent),var(--accent-2));
+      border-radius:inherit;
+    }
+    .thumb{
+      position:absolute; top:50%; transform:translate(-50%,-50%);
+      left:0%; width:16px; height:16px; border-radius:50%;
+      background:white; box-shadow:0 2px 8px rgba(0,0,0,.4);
+      pointer-events:none;
+    }
+    .times{display:flex; justify-content:space-between; color:var(--muted); font-size:.85rem; margin:0 2px 10px}
+
+    .controls{
+      display:flex; justify-content:center; align-items:center; gap:14px; margin-top:4px;
+    }
+    button.icon{
+      -webkit-tap-highlight-color: transparent;
+      border:0; background:#202544; color:#dde3ff; width:44px; height:44px;
+      display:grid; place-items:center; border-radius:14px; cursor:pointer;
+      transition:transform .08s ease;
+    }
+    button.icon:hover{ transform: translateY(-1px); }
+    .primary{ width:64px; height:64px; font-size:0; background:
+      linear-gradient(180deg, #2b3160, #21264d); color:white; }
+    .visually-hidden{ position:absolute; inset:0; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; clip-path:inset(50%); }
+
+    /* Simple icons */
+    .i{width:18px; height:18px; display:inline-block}
+    .i.prev,.i.next{ position:relative }
+    .i.prev::before,.i.next::before{
+      content:""; position:absolute; inset:0; border-style:solid; border-width:9px 12px; border-color:transparent;
+    }
+    .i.prev::before{ border-right-color:#e9ecff; left:8px }
+    .i.next::before{ border-left-color:#e9ecff; right:8px }
+    .i.playpause{ position:relative; width:0; height:0 }
+    .i.playpause.playing{ /* pause icon */ width:22px; height:22px }
+    .i.playpause.playing::before,.i.playpause.playing::after{
+      content:""; position:absolute; top:2px; width:6px; height:18px; background:#fff; border-radius:2px;
+    }
+    .i.playpause.playing::before{ left:4px } .i.playpause.playing::after{ right:4px }
+    .i.playpause:not(.playing){ /* play icon */ border-style:solid; border-width:12px 0 12px 20px; border-color:transparent transparent transparent #fff; margin-left:5px }
+
+    .footer-tip{ text-align:center; color:#7d86b1; font-size:.8rem; margin-top:10px }
+    .kbd{
+      padding:.1rem .35rem; border:1px solid #334; border-bottom-width:2px; border-radius:6px;
+      background:#13162a; color:#cfe1ff; font-family:ui-monospace,SFMono-Regular,Menlo,monospace;
+    }
+  </style>
+</head>
+<body>
+  <div class="player" role="region" aria-label="Music player">
+    <div class="header">
+      <div class="cover" id="cover" aria-hidden="true"></div>
+      <div class="meta">
+        <h2 class="title" id="title">Loading…</h2>
+        <p class="artist" id="artist">—</p>
+      </div>
+    </div>
+
+    <div class="progress" id="progress" aria-label="Seek bar" role="slider" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+      <div class="bar" id="bar"></div>
+      <div class="thumb" id="thumb"></div>
+    </div>
+    <div class="times"><span id="current">0:00</span><span id="duration">0:00</span></div>
+
+    <div class="controls">
+      <button class="icon" id="prev" aria-label="Previous"><span class="i prev"></span></button>
+      <button class="icon primary" id="play" aria-label="Play/Pause"><span class="i playpause" id="ppIcon"></span><span class="visually-hidden">Play/Pause</span></button>
+      <button class="icon" id="next" aria-label="Next"><span class="i next"></span></button>
+    </div>
+
+    <p class="footer-tip">Tip: Press <span class="kbd">Space</span> to play/pause</p>
+  </div>
+
+  <audio id="audio" crossorigin="anonymous"></audio>
+
+  <script>
+    // === Playlist (replace with your files if you want) ======================
+    const playlist = [
+      {
+        title: "SoundHelix Song 1",
+        artist: "SoundHelix",
+        src: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3"
+      },
+      {
+        title: "SoundHelix Song 2",
+        artist: "SoundHelix",
+        src: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3"
+      },
+      {
+        title: "Acoustic Breeze",
+        artist: "Bensound (demo)",
+        src: "https://file-examples.com/storage/fe1b3f8b2b1e3b2f0ec1c8a/2017/11/file_example_MP3_700KB.mp3"
+      }
+    ];
+
+    // === Elements ============================================================
+    const audio   = document.getElementById('audio');
+    const titleEl = document.getElementById('title');
+    const artistEl= document.getElementById('artist');
+    const playBtn = document.getElementById('play');
+    const prevBtn = document.getElementById('prev');
+    const nextBtn = document.getElementById('next');
+    const ppIcon  = document.getElementById('ppIcon');
+    const progress= document.getElementById('progress');
+    const bar     = document.getElementById('bar');
+    const thumb   = document.getElementById('thumb');
+    const current = document.getElementById('current');
+    const duration= document.getElementById('duration');
+
+    let index = 0;
+    let dragging = false;
+
+    function formatTime(sec){
+      if (!Number.isFinite(sec)) return "0:00";
+      sec = Math.max(0, Math.floor(sec));
+      const m = Math.floor(sec/60);
+      const s = sec%60;
+      return m + ":" + String(s).padStart(2,'0');
+    }
+
+    function loadTrack(i){
+      index = (i + playlist.length) % playlist.length;
+      const track = playlist[index];
+      titleEl.textContent = track.title;
+      artistEl.textContent = track.artist;
+      audio.src = track.src;
+      audio.load();
+      updatePlayIcon(false);
+    }
+
+    function updatePlayIcon(isPlaying){
+      ppIcon.classList.toggle('playing', isPlaying);
+    }
+
+    function play(){
+      audio.play().then(()=>updatePlayIcon(true)).catch(()=>{/* autoplay blocked */});
+    }
+
+    function pause(){
+      audio.pause();
+      updatePlayIcon(false);
+    }
+
+    function toggle(){
+      audio.paused ? play() : pause();
+    }
+
+    // Progress bar update
+    function setProgressByRatio(ratio){
+      ratio = Math.min(1, Math.max(0, ratio));
+      bar.style.width = (ratio*100) + "%";
+      thumb.style.left = (ratio*100) + "%";
+      progress.setAttribute('aria-valuenow', Math.round(ratio*100));
+    }
+
+    function updateProgress(){
+      const r = audio.duration ? audio.currentTime / audio.duration : 0;
+      setProgressByRatio(r);
+      current.textContent = formatTime(audio.currentTime);
+      duration.textContent = formatTime(audio.duration);
+    }
+
+    function seekByClientX(clientX){
+      const rect = progress.getBoundingClientRect();
+      const ratio = (clientX - rect.left) / rect.width;
+      audio.currentTime = Math.max(0, Math.min(audio.duration || 0, ratio * (audio.duration || 0)));
+    }
+
+    // === Wire up events ======================================================
+    playBtn.addEventListener('click', toggle);
+    prevBtn.addEventListener('click', () => { loadTrack(index-1); play(); });
+    nextBtn.addEventListener('click', () => { loadTrack(index+1); play(); });
+
+    // Keyboard: Space to play/pause
+    window.addEventListener('keydown', (e)=>{
+      if (e.code === 'Space'){
+        e.preventDefault();
+        toggle();
+      }
+    });
+
+    // Progress interactions: click + drag
+    progress.addEventListener('click', (e)=>{
+      seekByClientX(e.clientX);
+    });
+
+    progress.addEventListener('pointerdown', (e)=>{
+      dragging = true;
+      progress.setPointerCapture(e.pointerId);
+      seekByClientX(e.clientX);
+    });
+    progress.addEventListener('pointermove', (e)=>{
+      if (!dragging) return;
+      // Visual follow while dragging (even before audio updates)
+      const rect = progress.getBoundingClientRect();
+      const ratio = (e.clientX - rect.left) / rect.width;
+      setProgressByRatio(Math.min(1, Math.max(0, ratio)));
+      // Defer actual seek until pointerup to avoid stutter on some mobiles
+    });
+    progress.addEventListener('pointerup', (e)=>{
+      if (!dragging) return;
+      dragging = false;
+      seekByClientX(e.clientX);
+    });
+    progress.addEventListener('pointercancel', ()=> dragging = false);
+
+    // Audio events
+    audio.addEventListener('timeupdate', updateProgress);
+    audio.addEventListener('loadedmetadata', updateProgress);
+    audio.addEventListener('play', ()=>updatePlayIcon(true));
+    audio.addEventListener('pause', ()=>updatePlayIcon(false));
+    audio.addEventListener('ended', ()=>{ loadTrack(index+1); play(); });
+
+    // Init
+    loadTrack(0);
+  </script>
+</body>
+</html>
